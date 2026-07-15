@@ -9,7 +9,9 @@ SmashDraw is a public Next.js web application for creating randomized, single-ro
 - Generate one randomized knockout round at a time.
 - Edit the knockout-round number or name.
 - Enter scores, mark each winner, and save completed rounds.
+- Toggle a winner off or reset an individual match result.
 - Review shared saved results in a separate History tab.
+- Re-saving the same round replaces its prior snapshot; saved results can be exported as CSV.
 - Automatically assign byes when required.
 - Optionally prevent participants 1–4 from drawing one another.
 - Shared tournament rule controls available without authentication.

@@ -179,6 +179,9 @@ textarea:focus { border-color: var(--lime); box-shadow: 0 0 0 3px rgba(201,255,7
 .match-label { align-self: stretch; border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .match-label span { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .14em; }
 .match-label strong { color: var(--orange); font: 700 24px ui-monospace, monospace; margin-top: 4px; }
+.match-label button { margin-top: 13px; padding: 4px 6px; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.match-label button:not(:disabled):hover { color: var(--orange); background: rgba(255,107,61,.08); }
+.match-label button:disabled { opacity: .25; cursor: default; }
 .match-players { padding: 15px 16px; display: grid; gap: 12px; position: relative; }
 .result-row { display: grid; grid-template-columns: minmax(0, 1fr) 76px 62px; gap: 7px; align-items: center; }
 .participant-slot { min-height: 43px; display: grid; grid-template-columns: 31px 1fr; align-items: center; gap: 10px; padding: 0 12px; background: #10191a; border-left: 2px solid var(--lime); }
@@ -217,6 +220,7 @@ textarea:focus { border-color: var(--lime); box-shadow: 0 0 0 3px rgba(201,255,7
 .history-heading { min-height: 300px; display: flex; align-items: center; justify-content: space-between; gap: 40px; border-bottom: 1px solid var(--line); }
 .history-heading h1 { font-size: clamp(58px, 7vw, 92px); margin-bottom: 26px; }
 .history-heading > div > p:last-child { max-width: 650px; color: #aab3af; line-height: 1.7; }
+.history-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .history-message { margin: 24px 0; color: #ffd0c2; }
 .empty-history { text-align: center; padding: 90px 24px; border-bottom: 1px solid var(--line); }
 .empty-history > span { color: var(--orange); font: 700 12px ui-monospace, monospace; }
@@ -273,6 +277,7 @@ footer a { color: var(--lime); text-decoration: none; font-weight: 750; }
   .history-page { padding-top: 40px; }
   .admin-heading { min-height: auto; padding-bottom: 42px; }
   .history-heading { min-height: auto; padding-bottom: 42px; align-items: flex-start; flex-direction: column; }
+  .history-actions { width: 100%; justify-content: flex-start; }
   .history-round-heading { align-items: flex-start; flex-direction: column; }
   .admin-shield { display: none; }
   .admin-panel, .admin-note { padding: 30px 20px; }
@@ -305,6 +310,7 @@ footer a { color: var(--lime); text-decoration: none; font-weight: 750; }
   .participant-slot { border-left-color: #333; }
   .score-input { border-color: #777; background: white; color: #111; }
   .winner-button { display: none; }
+  .match-label button { display: none; }
   .connector { display: none; }
   .match-card { grid-template-columns: 60px 1fr; }
   .bye-panel { color: #111; }

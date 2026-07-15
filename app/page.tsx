@@ -320,6 +320,16 @@ export default function Home() {
     setResultsMessage("");
   }
 
+  function resetMatchResult(matchId: number) {
+    setMatchResults((current) => {
+      const next = { ...current };
+      delete next[matchId];
+      return next;
+    });
+    setResultsSaved(false);
+    setResultsMessage("");
+  }
+
   async function saveRoundResults() {
     if (!draw || isSavingResults) return;
     const cleanRoundLabel = roundLabel.trim();
@@ -357,7 +367,12 @@ export default function Home() {
       const payload = (await response.json()) as { round?: HistoryRound; error?: string };
       if (!response.ok || !payload.round) throw new Error(payload.error ?? "Results could not be saved.");
 
-      setHistory((current) => [payload.round!, ...current]);
+      const savedRound = payload.round;
+      const savedRoundKey = savedRound.roundLabel.trim().toLocaleLowerCase();
+      setHistory((current) => [
+        savedRound,
+        ...current.filter((round) => round.roundLabel.trim().toLocaleLowerCase() !== savedRoundKey),
+      ]);
       setHistoryLoaded(true);
       setResultsSaved(true);
       setResultsMessage("Round results saved to History.");
@@ -366,6 +381,35 @@ export default function Home() {
     } finally {
       setIsSavingResults(false);
     }
+  }
+
+  function exportResults() {
+    if (history.length === 0) return;
+    const escapeCsv = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
+    const rows = [["Round", "Saved at", "Match", "Player 1", "Score 1", "Player 2", "Score 2", "Winner"]];
+
+    for (const round of history) {
+      for (const match of round.matches) {
+        rows.push([
+          round.roundLabel,
+          new Date(round.savedAt).toLocaleString(),
+          String(match.matchNumber),
+          match.playerOne,
+          match.playerOneScore,
+          match.playerTwo,
+          match.playerTwoScore,
+          match.winner,
+        ]);
+      }
+    }
+
+    const csv = `\uFEFF${rows.map((row) => row.map(escapeCsv).join(",")).join("\n")}`;
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `smashdraw-results-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   function resetAll() {
@@ -507,7 +551,11 @@ export default function Home() {
           <div className="match-grid">
             {draw.matches.map((match) => (
               <article className="match-card" key={`${draw.createdAt.getTime()}-${match.id}`}>
-                <div className="match-label"><span>Match</span><strong>{String(match.id).padStart(2, "0")}</strong></div>
+                <div className="match-label">
+                  <span>Match</span>
+                  <strong>{String(match.id).padStart(2, "0")}</strong>
+                  <button type="button" disabled={!matchResults[match.id]} onClick={() => resetMatchResult(match.id)}>Reset</button>
+                </div>
                 <div className="match-players">
                   <div className="result-row">
                     <ParticipantSlot participant={match.playerOne} />
@@ -523,7 +571,7 @@ export default function Home() {
                       className={`winner-button ${matchResults[match.id]?.winnerId === match.playerOne.id ? "selected" : ""}`}
                       type="button"
                       aria-pressed={matchResults[match.id]?.winnerId === match.playerOne.id}
-                      onClick={() => updateMatchResult(match.id, { winnerId: match.playerOne.id })}
+                      onClick={() => updateMatchResult(match.id, { winnerId: matchResults[match.id]?.winnerId === match.playerOne.id ? undefined : match.playerOne.id })}
                     >Winner</button>
                   </div>
                   <span className="versus">VS</span>
@@ -541,7 +589,7 @@ export default function Home() {
                       className={`winner-button ${matchResults[match.id]?.winnerId === match.playerTwo.id ? "selected" : ""}`}
                       type="button"
                       aria-pressed={matchResults[match.id]?.winnerId === match.playerTwo.id}
-                      onClick={() => updateMatchResult(match.id, { winnerId: match.playerTwo.id })}
+                      onClick={() => updateMatchResult(match.id, { winnerId: matchResults[match.id]?.winnerId === match.playerTwo.id ? undefined : match.playerTwo.id })}
                     >Winner</button>
                   </div>
                 </div>
@@ -569,7 +617,10 @@ export default function Home() {
               <h1>Match<br /><em>history.</em></h1>
               <p>Each saved round keeps its matchups, scores, winners and save time. History is shared with everyone using this tournament site.</p>
             </div>
-            <button className="secondary-button" type="button" onClick={() => setActiveTab("draw")}>Return to draw</button>
+            <div className="history-actions">
+              <button className="primary-button compact" type="button" disabled={history.length === 0} onClick={exportResults}>Export CSV</button>
+              <button className="secondary-button" type="button" onClick={() => setActiveTab("draw")}>Return to draw</button>
+            </div>
           </div>
 
           {historyMessage && <p className="history-message" role="status">{historyMessage}</p>}

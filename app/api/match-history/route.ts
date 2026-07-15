@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { TableClient } from "@azure/data-tables";
 
 export const dynamic = "force-dynamic";
@@ -24,6 +24,7 @@ type HistoryEntity = {
   partitionKey: string;
   rowKey: string;
   roundLabel: string;
+  roundKey?: string;
   matchesJson: string;
   savedAt: string;
 };
@@ -61,16 +62,22 @@ function isSavedMatch(value: unknown): value is SavedMatch {
   return Number.isInteger(match.matchNumber)
     && typeof match.playerOne === "string"
     && typeof match.playerOneScore === "string"
+    && match.playerOneScore.trim().length > 0
     && typeof match.playerTwo === "string"
     && typeof match.playerTwoScore === "string"
+    && match.playerTwoScore.trim().length > 0
     && typeof match.winner === "string"
     && [match.playerOne, match.playerTwo].includes(match.winner);
+}
+
+function normalizeRoundKey(roundLabel: string) {
+  return roundLabel.trim().toLocaleLowerCase();
 }
 
 export async function GET() {
   try {
     const client = await getTableClient();
-    const rounds: Array<{ id: string; roundLabel: string; matches: SavedMatch[]; savedAt: string }> = [];
+    const roundsByKey = new Map<string, { id: string; roundLabel: string; matches: SavedMatch[]; savedAt: string }>();
 
     for await (const entity of client.listEntities<HistoryEntity>({
       queryOptions: { filter: `PartitionKey eq '${PARTITION_KEY}'` },
@@ -78,18 +85,21 @@ export async function GET() {
       try {
         const matches = JSON.parse(entity.matchesJson) as unknown;
         if (!Array.isArray(matches) || !matches.every(isSavedMatch)) continue;
-        rounds.push({
+        const round = {
           id: entity.rowKey,
           roundLabel: entity.roundLabel,
           matches,
           savedAt: entity.savedAt,
-        });
+        };
+        const roundKey = normalizeRoundKey(entity.roundLabel);
+        const existing = roundsByKey.get(roundKey);
+        if (!existing || round.savedAt > existing.savedAt) roundsByKey.set(roundKey, round);
       } catch {
         // Ignore malformed legacy rows instead of failing the complete history response.
       }
     }
 
-    rounds.sort((left, right) => right.savedAt.localeCompare(left.savedAt));
+    const rounds = [...roundsByKey.values()].sort((left, right) => right.savedAt.localeCompare(left.savedAt));
     return Response.json({ rounds });
   } catch (error) {
     return Response.json(
@@ -112,21 +122,32 @@ export async function POST(request: Request) {
     }
 
     const savedAt = new Date().toISOString();
-    const rowKey = `${Date.now()}-${randomUUID()}`;
+    const roundKey = normalizeRoundKey(roundLabel);
+    const rowKey = createHash("sha256").update(roundKey).digest("hex");
     const entity: HistoryEntity = {
       partitionKey: PARTITION_KEY,
       rowKey,
       roundLabel,
+      roundKey,
       matchesJson: JSON.stringify(payload.matches),
       savedAt,
     };
 
     const client = await getTableClient();
-    await client.createEntity(entity);
+    await client.upsertEntity(entity, "Replace");
+
+    // Remove snapshots created by the earlier append-only implementation.
+    for await (const previous of client.listEntities<HistoryEntity>({
+      queryOptions: { filter: `PartitionKey eq '${PARTITION_KEY}'` },
+    })) {
+      if (previous.rowKey !== rowKey && normalizeRoundKey(previous.roundLabel) === roundKey) {
+        await client.deleteEntity(previous.partitionKey, previous.rowKey);
+      }
+    }
 
     return Response.json({
       round: { id: rowKey, roundLabel, matches: payload.matches, savedAt },
-    }, { status: 201 });
+    });
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "Match results could not be saved." },
