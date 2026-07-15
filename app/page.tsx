@@ -140,6 +140,8 @@ export default function Home() {
   const [participantText, setParticipantText] = useState(sampleParticipants);
   const [protectTopFour, setProtectTopFour] = useState(true);
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isSavingRule, setIsSavingRule] = useState(false);
   const [draw, setDraw] = useState<Draw | null>(null);
   const [message, setMessage] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -147,17 +149,48 @@ export default function Home() {
   const names = useMemo(() => parseNames(participantText), [participantText]);
 
   useEffect(() => {
-    fetch("/tournament-config.json")
+    fetch("/api/tournament-config", { cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error("Config not found");
         return response.json();
       })
-      .then((config: { protectTopFour?: boolean }) => {
+      .then((config: { protectTopFour?: boolean; isAdmin?: boolean }) => {
         setProtectTopFour(config.protectTopFour !== false);
+        setIsAdmin(config.isAdmin === true);
       })
-      .catch(() => setProtectTopFour(true))
+      .catch(() => {
+        setProtectTopFour(true);
+        setIsAdmin(false);
+      })
       .finally(() => setConfigLoaded(true));
   }, []);
+
+  async function updateProtectionRule() {
+    if (!isAdmin || isSavingRule) return;
+    setIsSavingRule(true);
+    setMessage("");
+
+    try {
+      const nextValue = !protectTopFour;
+      const response = await fetch("/api/tournament-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ protectTopFour: nextValue }),
+      });
+      const payload = (await response.json()) as { protectTopFour?: boolean; error?: string };
+      if (!response.ok || typeof payload.protectTopFour !== "boolean") {
+        throw new Error(payload.error ?? "The rule could not be updated.");
+      }
+
+      setProtectTopFour(payload.protectTopFour);
+      setDraw(null);
+      setMessage(`Top-four protection turned ${payload.protectTopFour ? "on" : "off"}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The rule could not be updated.");
+    } finally {
+      setIsSavingRule(false);
+    }
+  }
 
   async function importFile(file?: File) {
     if (!file) return;
@@ -305,8 +338,21 @@ export default function Home() {
             <div>
               <strong>Protect participants 1–4</strong>
               <p>{protectTopFour ? "The first four entrants cannot draw one another." : "All participants may draw one another."}</p>
-              <small>Controlled by <code>public/tournament-config.json</code></small>
+              <small>{isAdmin ? "You are signed in as an administrator." : "Only an administrator can change this setting."}</small>
             </div>
+            <button
+              className={`admin-toggle ${protectTopFour ? "is-on" : ""}`}
+              type="button"
+              role="switch"
+              aria-checked={protectTopFour}
+              aria-label="Protect participants 1 to 4"
+              disabled={!configLoaded || !isAdmin || isSavingRule}
+              onClick={updateProtectionRule}
+              title={isAdmin ? "Change top-four protection" : "Administrator access required"}
+            >
+              <span><i /></span>
+              <b>{isSavingRule ? "Saving" : isAdmin ? "Admin control" : "Locked"}</b>
+            </button>
           </div>
 
           {message && <p className="form-message" role="status">{message}</p>}

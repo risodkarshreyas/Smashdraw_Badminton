@@ -121,7 +121,7 @@ textarea:focus { border-color: var(--lime); box-shadow: 0 0 0 3px rgba(201,255,7
 .secondary-button, .text-button, .primary-button { cursor: pointer; transition: transform .18s, background .18s, color .18s; }
 .secondary-button { background: transparent; border: 1px solid rgba(255,255,255,.22); color: var(--paper); padding: 10px 15px; border-radius: 7px; font-size: 12px; font-weight: 750; }
 .secondary-button:hover { border-color: var(--lime); color: var(--lime); }
-.rule-card { margin-top: 16px; display: grid; grid-template-columns: auto 1fr; gap: 16px; background: #111b1b; border-left: 3px solid var(--lime); padding: 17px 18px; }
+.rule-card { margin-top: 16px; display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; background: #111b1b; border-left: 3px solid var(--lime); padding: 17px 18px; }
 .rule-card strong { font-size: 13px; }
 .rule-card p { color: #aab3af; font-size: 12px; margin: 5px 0 6px; }
 .rule-card code { color: #d6ddd9; }
@@ -131,6 +131,14 @@ textarea:focus { border-color: var(--lime); box-shadow: 0 0 0 3px rgba(201,255,7
 .rule-status.on i { background: var(--lime); box-shadow: 0 0 7px var(--lime); }
 .rule-status.off { color: #ff9c7d; }
 .rule-status.off i { background: var(--orange); }
+.admin-toggle { display: grid; justify-items: center; gap: 6px; min-width: 86px; padding: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.admin-toggle > span { width: 44px; height: 24px; border-radius: 999px; padding: 3px; display: block; background: #65706c; transition: background .2s; }
+.admin-toggle > span i { width: 18px; height: 18px; display: block; border-radius: 50%; background: white; transition: transform .2s; }
+.admin-toggle.is-on > span { background: var(--lime); }
+.admin-toggle.is-on > span i { transform: translateX(20px); background: #0a1112; }
+.admin-toggle b { font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+.admin-toggle:disabled { cursor: not-allowed; opacity: .45; }
+.admin-toggle:not(:disabled):hover b { color: var(--lime); }
 .form-message { margin: 14px 0 0; color: #ffd0c2; font-size: 12px; line-height: 1.5; }
 .form-actions { display: flex; align-items: center; gap: 18px; margin-top: 24px; }
 .primary-button { min-height: 52px; background: var(--lime); color: #0a1112; padding: 0 12px 0 22px; border-radius: 8px; font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: .06em; display: inline-flex; align-items: center; gap: 22px; }
@@ -203,7 +211,9 @@ footer a { color: var(--lime); text-decoration: none; font-weight: 750; }
   .entry-panel, .format-panel { padding: 30px 20px; }
   .file-drop { grid-template-columns: auto 1fr; }
   .file-drop .secondary-button { grid-column: 1 / -1; }
-  .rule-card { grid-template-columns: 1fr; }
+  .rule-card { grid-template-columns: 1fr auto; }
+  .rule-card > div { grid-column: 1 / -1; grid-row: 2; }
+  .admin-toggle { grid-column: 2; grid-row: 1; }
   .form-actions { align-items: stretch; flex-direction: column; }
   .primary-button { justify-content: space-between; }
   .draw-heading, .bye-panel { align-items: stretch; flex-direction: column; }
