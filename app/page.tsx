@@ -19,6 +19,28 @@ type Draw = {
   createdAt: Date;
 };
 
+type MatchResultDraft = {
+  playerOneScore: string;
+  playerTwoScore: string;
+  winnerId?: number;
+};
+
+type SavedMatch = {
+  matchNumber: number;
+  playerOne: string;
+  playerOneScore: string;
+  playerTwo: string;
+  playerTwoScore: string;
+  winner: string;
+};
+
+type HistoryRound = {
+  id: string;
+  roundLabel: string;
+  matches: SavedMatch[];
+  savedAt: string;
+};
+
 const sampleParticipants = [
   "Aarav Shah",
   "Meera Iyer",
@@ -138,8 +160,16 @@ export default function Home() {
   const [protectTopFour, setProtectTopFour] = useState(true);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [isSavingRule, setIsSavingRule] = useState(false);
-  const [activeTab, setActiveTab] = useState<"draw" | "admin">("draw");
+  const [activeTab, setActiveTab] = useState<"draw" | "history" | "admin">("draw");
   const [draw, setDraw] = useState<Draw | null>(null);
+  const [roundLabel, setRoundLabel] = useState("01");
+  const [matchResults, setMatchResults] = useState<Record<number, MatchResultDraft>>({});
+  const [isSavingResults, setIsSavingResults] = useState(false);
+  const [resultsSaved, setResultsSaved] = useState(false);
+  const [resultsMessage, setResultsMessage] = useState("");
+  const [history, setHistory] = useState<HistoryRound[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [historyMessage, setHistoryMessage] = useState("");
   const [message, setMessage] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -160,6 +190,23 @@ export default function Home() {
       })
       .finally(() => setConfigLoaded(true));
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "history" || historyLoaded) return;
+
+    fetch("/api/match-history", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = (await response.json()) as { rounds?: HistoryRound[]; error?: string };
+        if (!response.ok || !Array.isArray(payload.rounds)) {
+          throw new Error(payload.error ?? "Match history could not be loaded.");
+        }
+        setHistory(payload.rounds);
+      })
+      .catch((error) => {
+        setHistoryMessage(error instanceof Error ? error.message : "Match history could not be loaded.");
+      })
+      .finally(() => setHistoryLoaded(true));
+  }, [activeTab, historyLoaded]);
 
   async function updateProtectionRule() {
     if (isSavingRule) return;
@@ -253,12 +300,80 @@ export default function Home() {
       return;
     }
     setDraw(makeDraw(names, protectTopFour));
+    setMatchResults({});
+    setResultsSaved(false);
+    setResultsMessage("");
     requestAnimationFrame(() => document.getElementById("draw-board")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  function updateMatchResult(matchId: number, update: Partial<MatchResultDraft>) {
+    setMatchResults((current) => ({
+      ...current,
+      [matchId]: {
+        playerOneScore: current[matchId]?.playerOneScore ?? "",
+        playerTwoScore: current[matchId]?.playerTwoScore ?? "",
+        winnerId: current[matchId]?.winnerId,
+        ...update,
+      },
+    }));
+    setResultsSaved(false);
+    setResultsMessage("");
+  }
+
+  async function saveRoundResults() {
+    if (!draw || isSavingResults) return;
+    const cleanRoundLabel = roundLabel.trim();
+    if (!cleanRoundLabel) {
+      setResultsMessage("Enter a round number or name before saving.");
+      return;
+    }
+
+    const matches = draw.matches.map((match): SavedMatch | null => {
+      const result = matchResults[match.id];
+      if (!result?.playerOneScore.trim() || !result.playerTwoScore.trim() || !result.winnerId) return null;
+      return {
+        matchNumber: match.id,
+        playerOne: match.playerOne.name,
+        playerOneScore: result.playerOneScore.trim(),
+        playerTwo: match.playerTwo.name,
+        playerTwoScore: result.playerTwoScore.trim(),
+        winner: result.winnerId === match.playerOne.id ? match.playerOne.name : match.playerTwo.name,
+      };
+    });
+
+    if (matches.some((match) => match === null)) {
+      setResultsMessage("Add both scores and mark a winner for every match.");
+      return;
+    }
+
+    setIsSavingResults(true);
+    setResultsMessage("");
+    try {
+      const response = await fetch("/api/match-history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roundLabel: cleanRoundLabel, matches }),
+      });
+      const payload = (await response.json()) as { round?: HistoryRound; error?: string };
+      if (!response.ok || !payload.round) throw new Error(payload.error ?? "Results could not be saved.");
+
+      setHistory((current) => [payload.round!, ...current]);
+      setHistoryLoaded(true);
+      setResultsSaved(true);
+      setResultsMessage("Round results saved to History.");
+    } catch (error) {
+      setResultsMessage(error instanceof Error ? error.message : "Results could not be saved.");
+    } finally {
+      setIsSavingResults(false);
+    }
   }
 
   function resetAll() {
     setParticipantText("");
     setDraw(null);
+    setMatchResults({});
+    setResultsSaved(false);
+    setResultsMessage("");
     setMessage("");
   }
 
@@ -277,6 +392,12 @@ export default function Home() {
               aria-current={activeTab === "draw" ? "page" : undefined}
               onClick={() => setActiveTab("draw")}
             >Draw</button>
+            <button
+              className={activeTab === "history" ? "active" : ""}
+              type="button"
+              aria-current={activeTab === "history" ? "page" : undefined}
+              onClick={() => setActiveTab("history")}
+            >History</button>
             <button
               className={activeTab === "admin" ? "active" : ""}
               type="button"
@@ -358,11 +479,11 @@ export default function Home() {
           <span className="step-number">02</span>
           <p className="section-label">How it works</p>
           <h2>Next round only</h2>
-          <p>Every click creates a fresh randomized fixture for the immediate knockout round. Winners are not predicted and future rounds are not generated.</p>
+          <p>Every click creates a fresh randomized fixture for the immediate knockout round. Enter scores and winners after play; future rounds are not generated automatically.</p>
           <ol>
             <li><span>1</span><div><strong>Order your list</strong><small>Positions 1–4 are the protected entries when the rule is on.</small></div></li>
             <li><span>2</span><div><strong>Generate the draw</strong><small>Players are shuffled and paired without protected clashes.</small></div></li>
-            <li><span>3</span><div><strong>Print or save</strong><small>Use your browser’s print option for a clean fixture sheet.</small></div></li>
+            <li><span>3</span><div><strong>Record the results</strong><small>Add scores, mark each winner and save the round to History.</small></div></li>
           </ol>
         </aside>
       </section>
@@ -372,12 +493,14 @@ export default function Home() {
           <div className="draw-heading">
             <div>
               <p className="eyebrow">Draw complete</p>
-              <h2>Knockout round <span>01</span></h2>
+              <h2 className="round-title">Knockout round <input aria-label="Round number or name" maxLength={40} value={roundLabel} onChange={(event) => { setRoundLabel(event.target.value); setResultsSaved(false); }} /></h2>
               <p>{draw.matches.length} matches · {draw.byes.length} {draw.byes.length === 1 ? "bye" : "byes"} · Generated {draw.createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+              {resultsMessage && <p className={`results-message ${resultsSaved ? "success" : ""}`} role="status">{resultsMessage}</p>}
             </div>
             <div className="draw-actions">
+              <button className="primary-button compact" type="button" disabled={isSavingResults || resultsSaved} onClick={() => void saveRoundResults()}>{resultsSaved ? "Saved ✓" : isSavingResults ? "Saving…" : "Save results"}</button>
               <button className="secondary-button" type="button" onClick={() => window.print()}>Print draw</button>
-              <button className="primary-button compact" type="button" onClick={generateDraw}>Shuffle again ↻</button>
+              <button className="secondary-button" type="button" onClick={generateDraw}>Shuffle again ↻</button>
             </div>
           </div>
 
@@ -386,9 +509,41 @@ export default function Home() {
               <article className="match-card" key={`${draw.createdAt.getTime()}-${match.id}`}>
                 <div className="match-label"><span>Match</span><strong>{String(match.id).padStart(2, "0")}</strong></div>
                 <div className="match-players">
-                  <ParticipantSlot participant={match.playerOne} />
+                  <div className="result-row">
+                    <ParticipantSlot participant={match.playerOne} />
+                    <input
+                      className="score-input"
+                      aria-label={`Score for ${match.playerOne.name}`}
+                      placeholder="Score"
+                      maxLength={40}
+                      value={matchResults[match.id]?.playerOneScore ?? ""}
+                      onChange={(event) => updateMatchResult(match.id, { playerOneScore: event.target.value })}
+                    />
+                    <button
+                      className={`winner-button ${matchResults[match.id]?.winnerId === match.playerOne.id ? "selected" : ""}`}
+                      type="button"
+                      aria-pressed={matchResults[match.id]?.winnerId === match.playerOne.id}
+                      onClick={() => updateMatchResult(match.id, { winnerId: match.playerOne.id })}
+                    >Winner</button>
+                  </div>
                   <span className="versus">VS</span>
-                  <ParticipantSlot participant={match.playerTwo} />
+                  <div className="result-row">
+                    <ParticipantSlot participant={match.playerTwo} />
+                    <input
+                      className="score-input"
+                      aria-label={`Score for ${match.playerTwo.name}`}
+                      placeholder="Score"
+                      maxLength={40}
+                      value={matchResults[match.id]?.playerTwoScore ?? ""}
+                      onChange={(event) => updateMatchResult(match.id, { playerTwoScore: event.target.value })}
+                    />
+                    <button
+                      className={`winner-button ${matchResults[match.id]?.winnerId === match.playerTwo.id ? "selected" : ""}`}
+                      type="button"
+                      aria-pressed={matchResults[match.id]?.winnerId === match.playerTwo.id}
+                      onClick={() => updateMatchResult(match.id, { winnerId: match.playerTwo.id })}
+                    >Winner</button>
+                  </div>
                 </div>
                 <div className="connector" aria-hidden="true"><i /><b /></div>
               </article>
@@ -406,7 +561,48 @@ export default function Home() {
         </section>
       )}
 
-      </> : (
+      </> : activeTab === "history" ? (
+        <section className="history-page" id="top">
+          <div className="history-heading">
+            <div>
+              <p className="eyebrow">Saved tournament results</p>
+              <h1>Match<br /><em>history.</em></h1>
+              <p>Each saved round keeps its matchups, scores, winners and save time. History is shared with everyone using this tournament site.</p>
+            </div>
+            <button className="secondary-button" type="button" onClick={() => setActiveTab("draw")}>Return to draw</button>
+          </div>
+
+          {historyMessage && <p className="history-message" role="status">{historyMessage}</p>}
+          {historyLoaded && history.length === 0 && !historyMessage && (
+            <div className="empty-history">
+              <span>00</span>
+              <h2>No saved results yet</h2>
+              <p>Generate a draw, enter each score, mark the winners and choose Save results.</p>
+              <button className="primary-button compact" type="button" onClick={() => setActiveTab("draw")}>Create a draw</button>
+            </div>
+          )}
+
+          <div className="history-list">
+            {history.map((round) => (
+              <article className="history-round" key={round.id}>
+                <div className="history-round-heading">
+                  <div><p className="section-label">Knockout round</p><h2>{round.roundLabel}</h2></div>
+                  <p>{round.matches.length} {round.matches.length === 1 ? "match" : "matches"} · Saved {new Date(round.savedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</p>
+                </div>
+                <div className="history-matches">
+                  {round.matches.map((match) => (
+                    <div className="history-match" key={`${round.id}-${match.matchNumber}`}>
+                      <span className="history-match-number">Match {String(match.matchNumber).padStart(2, "0")}</span>
+                      <div className={match.winner === match.playerOne ? "history-winner" : ""}><strong>{match.playerOne}</strong><b>{match.playerOneScore}</b>{match.winner === match.playerOne && <em>Winner</em>}</div>
+                      <div className={match.winner === match.playerTwo ? "history-winner" : ""}><strong>{match.playerTwo}</strong><b>{match.playerTwoScore}</b>{match.winner === match.playerTwo && <em>Winner</em>}</div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : (
         <section className="admin-page" id="top">
           <div className="admin-heading">
             <div>

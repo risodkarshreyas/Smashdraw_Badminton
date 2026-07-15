@@ -7,6 +7,9 @@ SmashDraw is a public Next.js web application for creating randomized, single-ro
 - Add participants using a multiline list.
 - Import names from TXT, CSV, XLS, or XLSX files.
 - Generate one randomized knockout round at a time.
+- Edit the knockout-round number or name.
+- Enter scores, mark each winner, and save completed rounds.
+- Review shared saved results in a separate History tab.
 - Automatically assign byes when required.
 - Optionally prevent participants 1–4 from drawing one another.
 - Shared tournament rule controls available without authentication.
@@ -33,7 +36,7 @@ npm run build
 
 ## Tournament configuration
 
-The Admin tab is visible to every user and does not require authentication. The selected top-four protection setting is persisted in the `TournamentSettings` Azure Table and applies to all users.
+The Admin tab is visible to every user and does not require authentication. The selected top-four protection setting is persisted in the `TournamentSettings` Azure Table and applies to all users. Saved round results are stored separately in the `TournamentHistory` Azure Table and shown in the History tab.
 
 ## Azure deployment
 
@@ -41,7 +44,8 @@ The application runs as a standard Next.js Node.js app on Azure App Service. Con
 
 ## Main project files
 
-- `app/page.tsx` — tournament and Admin interfaces.
+- `app/page.tsx` — draw, History, and Admin interfaces.
 - `app/api/tournament-config/route.ts` — Azure Table-backed configuration API.
+- `app/api/match-history/route.ts` — Azure Table-backed saved-results API.
 - `public/og.png` — SmashDraw badminton key art.
 - `CONFIGURATION.md` — tournament rule behavior.
