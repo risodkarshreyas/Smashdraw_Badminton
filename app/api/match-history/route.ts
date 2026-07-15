@@ -23,6 +23,7 @@ type SavedMatch = {
 type HistoryEntity = {
   partitionKey: string;
   rowKey: string;
+  roundName?: string;
   roundLabel: string;
   roundKey?: string;
   matchesJson: string;
@@ -62,22 +63,20 @@ function isSavedMatch(value: unknown): value is SavedMatch {
   return Number.isInteger(match.matchNumber)
     && typeof match.playerOne === "string"
     && typeof match.playerOneScore === "string"
-    && match.playerOneScore.trim().length > 0
     && typeof match.playerTwo === "string"
     && typeof match.playerTwoScore === "string"
-    && match.playerTwoScore.trim().length > 0
     && typeof match.winner === "string"
-    && [match.playerOne, match.playerTwo].includes(match.winner);
+    && (match.winner === "" || [match.playerOne, match.playerTwo].includes(match.winner));
 }
 
-function normalizeRoundKey(roundLabel: string) {
-  return roundLabel.trim().toLocaleLowerCase();
+function normalizeRoundKey(roundName: string, roundLabel: string) {
+  return `${roundName.trim().toLocaleLowerCase()}::${roundLabel.trim().toLocaleLowerCase()}`;
 }
 
 export async function GET() {
   try {
     const client = await getTableClient();
-    const roundsByKey = new Map<string, { id: string; roundLabel: string; matches: SavedMatch[]; savedAt: string }>();
+    const roundsByKey = new Map<string, { id: string; roundName: string; roundLabel: string; matches: SavedMatch[]; savedAt: string }>();
 
     for await (const entity of client.listEntities<HistoryEntity>({
       queryOptions: { filter: `PartitionKey eq '${PARTITION_KEY}'` },
@@ -85,13 +84,15 @@ export async function GET() {
       try {
         const matches = JSON.parse(entity.matchesJson) as unknown;
         if (!Array.isArray(matches) || !matches.every(isSavedMatch)) continue;
+        const roundName = entity.roundName?.trim() || "Knockout round";
         const round = {
           id: entity.rowKey,
+          roundName,
           roundLabel: entity.roundLabel,
           matches,
           savedAt: entity.savedAt,
         };
-        const roundKey = normalizeRoundKey(entity.roundLabel);
+        const roundKey = normalizeRoundKey(roundName, entity.roundLabel);
         const existing = roundsByKey.get(roundKey);
         if (!existing || round.savedAt > existing.savedAt) roundsByKey.set(roundKey, round);
       } catch {
@@ -111,22 +112,27 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const payload = (await request.json()) as { roundLabel?: unknown; matches?: unknown };
+    const payload = (await request.json()) as { roundName?: unknown; roundLabel?: unknown; matches?: unknown };
+    const roundName = typeof payload.roundName === "string" ? payload.roundName.trim() : "";
     const roundLabel = typeof payload.roundLabel === "string" ? payload.roundLabel.trim() : "";
 
+    if (!roundName || roundName.length > 40) {
+      return Response.json({ error: "Enter a round title of 1–40 characters." }, { status: 400 });
+    }
     if (!roundLabel || roundLabel.length > 40) {
       return Response.json({ error: "Enter a round label of 1–40 characters." }, { status: 400 });
     }
     if (!Array.isArray(payload.matches) || payload.matches.length === 0 || !payload.matches.every(isSavedMatch)) {
-      return Response.json({ error: "Every match needs scores and a selected winner." }, { status: 400 });
+      return Response.json({ error: "The round does not contain valid matches." }, { status: 400 });
     }
 
     const savedAt = new Date().toISOString();
-    const roundKey = normalizeRoundKey(roundLabel);
+    const roundKey = normalizeRoundKey(roundName, roundLabel);
     const rowKey = createHash("sha256").update(roundKey).digest("hex");
     const entity: HistoryEntity = {
       partitionKey: PARTITION_KEY,
       rowKey,
+      roundName,
       roundLabel,
       roundKey,
       matchesJson: JSON.stringify(payload.matches),
@@ -140,13 +146,14 @@ export async function POST(request: Request) {
     for await (const previous of client.listEntities<HistoryEntity>({
       queryOptions: { filter: `PartitionKey eq '${PARTITION_KEY}'` },
     })) {
-      if (previous.rowKey !== rowKey && normalizeRoundKey(previous.roundLabel) === roundKey) {
+      const previousRoundName = previous.roundName?.trim() || "Knockout round";
+      if (previous.rowKey !== rowKey && normalizeRoundKey(previousRoundName, previous.roundLabel) === roundKey) {
         await client.deleteEntity(previous.partitionKey, previous.rowKey);
       }
     }
 
     return Response.json({
-      round: { id: rowKey, roundLabel, matches: payload.matches, savedAt },
+      round: { id: rowKey, roundName, roundLabel, matches: payload.matches, savedAt },
     });
   } catch (error) {
     return Response.json(

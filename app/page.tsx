@@ -36,6 +36,7 @@ type SavedMatch = {
 
 type HistoryRound = {
   id: string;
+  roundName: string;
   roundLabel: string;
   matches: SavedMatch[];
   savedAt: string;
@@ -162,6 +163,7 @@ export default function Home() {
   const [isSavingRule, setIsSavingRule] = useState(false);
   const [activeTab, setActiveTab] = useState<"draw" | "history" | "admin">("draw");
   const [draw, setDraw] = useState<Draw | null>(null);
+  const [roundName, setRoundName] = useState("Knockout round");
   const [roundLabel, setRoundLabel] = useState("01");
   const [matchResults, setMatchResults] = useState<Record<number, MatchResultDraft>>({});
   const [isSavingResults, setIsSavingResults] = useState(false);
@@ -192,7 +194,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (activeTab !== "history" || historyLoaded) return;
+    if (activeTab !== "history") return;
 
     fetch("/api/match-history", { cache: "no-store" })
       .then(async (response) => {
@@ -201,12 +203,13 @@ export default function Home() {
           throw new Error(payload.error ?? "Match history could not be loaded.");
         }
         setHistory(payload.rounds);
+        setHistoryMessage("");
       })
       .catch((error) => {
         setHistoryMessage(error instanceof Error ? error.message : "Match history could not be loaded.");
       })
       .finally(() => setHistoryLoaded(true));
-  }, [activeTab, historyLoaded]);
+  }, [activeTab]);
 
   async function updateProtectionRule() {
     if (isSavingRule) return;
@@ -332,29 +335,30 @@ export default function Home() {
 
   async function saveRoundResults() {
     if (!draw || isSavingResults) return;
+    const cleanRoundName = roundName.trim();
     const cleanRoundLabel = roundLabel.trim();
+    if (!cleanRoundName) {
+      setResultsMessage("Enter a round title before saving.");
+      return;
+    }
     if (!cleanRoundLabel) {
-      setResultsMessage("Enter a round number or name before saving.");
+      setResultsMessage("Enter a round number or label before saving.");
       return;
     }
 
-    const matches = draw.matches.map((match): SavedMatch | null => {
+    const matches = draw.matches.map((match): SavedMatch => {
       const result = matchResults[match.id];
-      if (!result?.playerOneScore.trim() || !result.playerTwoScore.trim() || !result.winnerId) return null;
       return {
         matchNumber: match.id,
         playerOne: match.playerOne.name,
-        playerOneScore: result.playerOneScore.trim(),
+        playerOneScore: result?.playerOneScore.trim() ?? "",
         playerTwo: match.playerTwo.name,
-        playerTwoScore: result.playerTwoScore.trim(),
-        winner: result.winnerId === match.playerOne.id ? match.playerOne.name : match.playerTwo.name,
+        playerTwoScore: result?.playerTwoScore.trim() ?? "",
+        winner: result?.winnerId === match.playerOne.id
+          ? match.playerOne.name
+          : result?.winnerId === match.playerTwo.id ? match.playerTwo.name : "",
       };
     });
-
-    if (matches.some((match) => match === null)) {
-      setResultsMessage("Add both scores and mark a winner for every match.");
-      return;
-    }
 
     setIsSavingResults(true);
     setResultsMessage("");
@@ -362,16 +366,16 @@ export default function Home() {
       const response = await fetch("/api/match-history", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roundLabel: cleanRoundLabel, matches }),
+        body: JSON.stringify({ roundName: cleanRoundName, roundLabel: cleanRoundLabel, matches }),
       });
       const payload = (await response.json()) as { round?: HistoryRound; error?: string };
       if (!response.ok || !payload.round) throw new Error(payload.error ?? "Results could not be saved.");
 
       const savedRound = payload.round;
-      const savedRoundKey = savedRound.roundLabel.trim().toLocaleLowerCase();
+      const savedRoundKey = `${savedRound.roundName.trim().toLocaleLowerCase()}::${savedRound.roundLabel.trim().toLocaleLowerCase()}`;
       setHistory((current) => [
         savedRound,
-        ...current.filter((round) => round.roundLabel.trim().toLocaleLowerCase() !== savedRoundKey),
+        ...current.filter((round) => `${round.roundName.trim().toLocaleLowerCase()}::${round.roundLabel.trim().toLocaleLowerCase()}` !== savedRoundKey),
       ]);
       setHistoryLoaded(true);
       setResultsSaved(true);
@@ -386,11 +390,12 @@ export default function Home() {
   function exportResults() {
     if (history.length === 0) return;
     const escapeCsv = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
-    const rows = [["Round", "Saved at", "Match", "Player 1", "Score 1", "Player 2", "Score 2", "Winner"]];
+    const rows = [["Round title", "Round label", "Saved at", "Match", "Player 1", "Score 1", "Player 2", "Score 2", "Winner"]];
 
     for (const round of history) {
       for (const match of round.matches) {
         rows.push([
+          round.roundName,
           round.roundLabel,
           new Date(round.savedAt).toLocaleString(),
           String(match.matchNumber),
@@ -523,11 +528,11 @@ export default function Home() {
           <span className="step-number">02</span>
           <p className="section-label">How it works</p>
           <h2>Next round only</h2>
-          <p>Every click creates a fresh randomized fixture for the immediate knockout round. Enter scores and winners after play; future rounds are not generated automatically.</p>
+          <p>Every click creates a fresh randomized fixture for the immediate knockout round. Save at any time, then update scores and winners as matches finish.</p>
           <ol>
             <li><span>1</span><div><strong>Order your list</strong><small>Positions 1–4 are the protected entries when the rule is on.</small></div></li>
             <li><span>2</span><div><strong>Generate the draw</strong><small>Players are shuffled and paired without protected clashes.</small></div></li>
-            <li><span>3</span><div><strong>Record the results</strong><small>Add scores, mark each winner and save the round to History.</small></div></li>
+            <li><span>3</span><div><strong>Record the results</strong><small>Save the current snapshot, including any scores and winners entered so far.</small></div></li>
           </ol>
         </aside>
       </section>
@@ -537,7 +542,10 @@ export default function Home() {
           <div className="draw-heading">
             <div>
               <p className="eyebrow">Draw complete</p>
-              <h2 className="round-title">Knockout round <input aria-label="Round number or name" maxLength={40} value={roundLabel} onChange={(event) => { setRoundLabel(event.target.value); setResultsSaved(false); }} /></h2>
+              <h2 className="round-title">
+                <input className="round-name-input" aria-label="Round title" maxLength={40} size={Math.max(8, Math.min(24, roundName.length))} value={roundName} onChange={(event) => { setRoundName(event.target.value); setResultsSaved(false); }} />
+                <input className="round-label-input" aria-label="Round number or label" maxLength={40} size={Math.max(2, Math.min(12, roundLabel.length))} value={roundLabel} onChange={(event) => { setRoundLabel(event.target.value); setResultsSaved(false); }} />
+              </h2>
               <p>{draw.matches.length} matches · {draw.byes.length} {draw.byes.length === 1 ? "bye" : "byes"} · Generated {draw.createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
               {resultsMessage && <p className={`results-message ${resultsSaved ? "success" : ""}`} role="status">{resultsMessage}</p>}
             </div>
@@ -628,8 +636,7 @@ export default function Home() {
             <div className="empty-history">
               <span>00</span>
               <h2>No saved results yet</h2>
-              <p>Generate a draw, enter each score, mark the winners and choose Save results.</p>
-              <button className="primary-button compact" type="button" onClick={() => setActiveTab("draw")}>Create a draw</button>
+              <p>Use Save results on the Draw tab to store the current round snapshot.</p>
             </div>
           )}
 
@@ -637,15 +644,15 @@ export default function Home() {
             {history.map((round) => (
               <article className="history-round" key={round.id}>
                 <div className="history-round-heading">
-                  <div><p className="section-label">Knockout round</p><h2>{round.roundLabel}</h2></div>
+                  <div><p className="section-label">{round.roundName}</p><h2>{round.roundLabel}</h2></div>
                   <p>{round.matches.length} {round.matches.length === 1 ? "match" : "matches"} · Saved {new Date(round.savedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</p>
                 </div>
                 <div className="history-matches">
                   {round.matches.map((match) => (
                     <div className="history-match" key={`${round.id}-${match.matchNumber}`}>
                       <span className="history-match-number">Match {String(match.matchNumber).padStart(2, "0")}</span>
-                      <div className={match.winner === match.playerOne ? "history-winner" : ""}><strong>{match.playerOne}</strong><b>{match.playerOneScore}</b>{match.winner === match.playerOne && <em>Winner</em>}</div>
-                      <div className={match.winner === match.playerTwo ? "history-winner" : ""}><strong>{match.playerTwo}</strong><b>{match.playerTwoScore}</b>{match.winner === match.playerTwo && <em>Winner</em>}</div>
+                      <div className={match.winner === match.playerOne ? "history-winner" : ""}><strong>{match.playerOne}</strong><b>{match.playerOneScore || "—"}</b>{match.winner === match.playerOne && <em>Winner</em>}</div>
+                      <div className={match.winner === match.playerTwo ? "history-winner" : ""}><strong>{match.playerTwo}</strong><b>{match.playerTwoScore || "—"}</b>{match.winner === match.playerTwo && <em>Winner</em>}</div>
                     </div>
                   ))}
                 </div>

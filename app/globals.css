@@ -168,7 +168,9 @@ textarea:focus { border-color: var(--lime); box-shadow: 0 0 0 3px rgba(201,255,7
 .draw-heading h2 span { color: var(--lime); }
 .draw-heading > div > p:last-child { color: var(--muted); font-size: 12px; margin-bottom: 0; }
 .round-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: .2em; }
-.round-title input { width: min(230px, 45vw); border: 0; border-bottom: 2px solid rgba(201,255,74,.5); background: transparent; color: var(--lime); font: inherit; letter-spacing: inherit; outline: none; padding: 0 .06em; }
+.round-title input { width: auto; max-width: 100%; border: 0; border-bottom: 2px solid rgba(201,255,74,.5); background: transparent; font: inherit; letter-spacing: inherit; outline: none; padding: 0 .06em; }
+.round-title .round-name-input { min-width: 4em; color: var(--paper); }
+.round-title .round-label-input { min-width: 1.5em; color: var(--lime); }
 .round-title input:focus { border-color: var(--lime); background: rgba(201,255,74,.05); }
 .draw-heading .results-message { margin-top: 12px; color: #ffd0c2; }
 .draw-heading .results-message.success { color: var(--lime); }
@@ -308,9 +310,15 @@ footer a { color: var(--lime); text-decoration: none; font-weight: 750; }
   .match-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
   .match-card, .participant-slot { background: white; border-color: #aaa; break-inside: avoid; color: #111; }
   .participant-slot { border-left-color: #333; }
+  .match-players { min-width: 0; padding: 10px; }
+  .result-row { grid-template-columns: minmax(0, 1fr) 64px; }
+  .participant-slot { min-width: 0; min-height: 50px; padding: 4px 8px; }
+  .participant-name { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; font-size: 11px; }
   .score-input { border-color: #777; background: white; color: #111; }
   .winner-button { display: none; }
   .match-label button { display: none; }
+  .round-title input { width: auto; min-width: 0; max-width: 65%; border: 0; background: transparent; color: #111; padding: 0; }
+  .draw-heading .results-message { display: none; }
   .connector { display: none; }
   .match-card { grid-template-columns: 60px 1fr; }
   .bye-panel { color: #111; }
