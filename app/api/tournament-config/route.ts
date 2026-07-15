@@ -1,25 +1,67 @@
-import { eq } from "drizzle-orm";
-import { getDb } from "../../../db";
-import { appSettings } from "../../../db/schema";
+import { TableClient } from "@azure/data-tables";
 
 export const dynamic = "force-dynamic";
 
-const SETTING_KEY = "protectTopFour";
+const TABLE_NAME = "TournamentSettings";
+const PARTITION_KEY = "smashdraw";
+const ROW_KEY = "protectTopFour";
+
+type ErrorWithStatus = Error & {
+  statusCode?: number;
+  code?: string;
+};
+
+type SettingEntity = {
+  partitionKey: string;
+  rowKey: string;
+  value: string;
+  updatedAt?: string;
+};
+
+let tableClientPromise: Promise<TableClient> | null = null;
+
+function errorStatus(error: unknown) {
+  const candidate = error as ErrorWithStatus;
+  return { statusCode: candidate?.statusCode, code: candidate?.code };
+}
+
+function getTableClient() {
+  if (tableClientPromise) return tableClientPromise;
+
+  tableClientPromise = (async () => {
+    const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
+    if (!connectionString) {
+      throw new Error("AZURE_STORAGE_CONNECTION_STRING is not configured.");
+    }
+
+    const client = TableClient.fromConnectionString(connectionString, TABLE_NAME);
+    try {
+      await client.createTable();
+    } catch (error) {
+      const { statusCode, code } = errorStatus(error);
+      if (statusCode !== 409 && code !== "TableAlreadyExists") throw error;
+    }
+    return client;
+  })();
+
+  return tableClientPromise;
+}
 
 async function readProtectionSetting() {
-  const [setting] = await getDb()
-    .select({ value: appSettings.value })
-    .from(appSettings)
-    .where(eq(appSettings.key, SETTING_KEY))
-    .limit(1);
-
-  return setting ? setting.value === "true" : true;
+  const client = await getTableClient();
+  try {
+    const setting = await client.getEntity<SettingEntity>(PARTITION_KEY, ROW_KEY);
+    return setting.value !== "false";
+  } catch (error) {
+    const { statusCode, code } = errorStatus(error);
+    if (statusCode === 404 || code === "ResourceNotFound" || code === "EntityNotFound") return true;
+    throw error;
+  }
 }
 
 export async function GET() {
   try {
-    const protectTopFour = await readProtectionSetting();
-    return Response.json({ protectTopFour });
+    return Response.json({ protectTopFour: await readProtectionSetting() });
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "Configuration is unavailable." },
@@ -35,23 +77,16 @@ export async function PUT(request: Request) {
       return Response.json({ error: "protectTopFour must be true or false." }, { status: 400 });
     }
 
-    const updatedAt = new Date().toISOString();
-    await getDb()
-      .insert(appSettings)
-      .values({
-        key: SETTING_KEY,
+    const client = await getTableClient();
+    await client.upsertEntity<SettingEntity>(
+      {
+        partitionKey: PARTITION_KEY,
+        rowKey: ROW_KEY,
         value: String(payload.protectTopFour),
-        updatedAt,
-        updatedBy: "shared-admin-tab",
-      })
-      .onConflictDoUpdate({
-        target: appSettings.key,
-        set: {
-          value: String(payload.protectTopFour),
-          updatedAt,
-          updatedBy: "shared-admin-tab",
-        },
-      });
+        updatedAt: new Date().toISOString(),
+      },
+      "Replace",
+    );
 
     return Response.json({ protectTopFour: payload.protectTopFour });
   } catch (error) {

@@ -88,7 +88,7 @@ function makeDraw(names: string[], protectTopFour: boolean): Draw {
     return { matches, byes, createdAt: new Date() };
   }
 
-  let protectedPlayers = shuffle(participants.slice(0, 4));
+  const protectedPlayers = shuffle(participants.slice(0, 4));
   let openPlayers = shuffle(participants.slice(4));
   const byeCount = Math.max(participants.length % 2, protectedPlayers.length - openPlayers.length);
 
