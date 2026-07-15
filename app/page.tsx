@@ -138,6 +138,7 @@ export default function Home() {
   const [protectTopFour, setProtectTopFour] = useState(true);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isSavingRule, setIsSavingRule] = useState(false);
   const [activeTab, setActiveTab] = useState<"draw" | "admin">("draw");
   const [draw, setDraw] = useState<Draw | null>(null);
@@ -153,13 +154,15 @@ export default function Home() {
         if (!response.ok) throw new Error("Config not found");
         return response.json();
       })
-      .then((config: { protectTopFour?: boolean; isAdmin?: boolean }) => {
+      .then((config: { protectTopFour?: boolean; isAdmin?: boolean; isAuthenticated?: boolean }) => {
         setProtectTopFour(config.protectTopFour !== false);
         setIsAdmin(config.isAdmin === true);
+        setIsAuthenticated(config.isAuthenticated === true);
       })
       .catch(() => {
         setProtectTopFour(true);
         setIsAdmin(false);
+        setIsAuthenticated(false);
       })
       .finally(() => setConfigLoaded(true));
   }, []);
@@ -293,6 +296,10 @@ export default function Home() {
               >Admin</button>
             )}
           </nav>
+          <a
+            className="admin-auth-link"
+            href={isAuthenticated ? "/signout-with-chatgpt?return_to=%2F" : "/signin-with-chatgpt?return_to=%2F"}
+          >{isAuthenticated ? "Sign out" : "Admin sign in"}</a>
           <span className="header-kicker">Knockout tournament maker</span>
         </div>
       </header>

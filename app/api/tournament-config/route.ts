@@ -34,12 +34,12 @@ async function readProtectionSetting() {
 
 export async function GET() {
   try {
-    const [{ isAdmin }, protectTopFour] = await Promise.all([
+    const [{ user, isAdmin }, protectTopFour] = await Promise.all([
       accessContext(),
       readProtectionSetting(),
     ]);
 
-    return Response.json({ protectTopFour, isAdmin });
+    return Response.json({ protectTopFour, isAdmin, isAuthenticated: Boolean(user) });
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "Configuration is unavailable." },
@@ -81,7 +81,7 @@ export async function PUT(request: Request) {
         },
       });
 
-    return Response.json({ protectTopFour: payload.protectTopFour, isAdmin: true });
+    return Response.json({ protectTopFour: payload.protectTopFour, isAdmin: true, isAuthenticated: true });
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "The rule could not be updated." },
