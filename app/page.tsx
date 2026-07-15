@@ -5,7 +5,6 @@ import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "re
 type Participant = {
   id: number;
   name: string;
-  protected: boolean;
 };
 
 type Match = {
@@ -72,7 +71,6 @@ function makeDraw(names: string[], protectTopFour: boolean): Draw {
   const participants = names.map((name, index) => ({
     id: index + 1,
     name,
-    protected: protectTopFour && index < 4,
   }));
   const matches: Match[] = [];
   const byes: Participant[] = [];
@@ -131,7 +129,6 @@ function ParticipantSlot({ participant }: { participant: Participant }) {
     <div className="participant-slot">
       <span className="participant-number">{String(participant.id).padStart(2, "0")}</span>
       <span className="participant-name">{participant.name}</span>
-      {participant.protected && <span className="seed-badge">Protected</span>}
     </div>
   );
 }
@@ -142,8 +139,10 @@ export default function Home() {
   const [configLoaded, setConfigLoaded] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSavingRule, setIsSavingRule] = useState(false);
+  const [activeTab, setActiveTab] = useState<"draw" | "admin">("draw");
   const [draw, setDraw] = useState<Draw | null>(null);
   const [message, setMessage] = useState("");
+  const [adminMessage, setAdminMessage] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const names = useMemo(() => parseNames(participantText), [participantText]);
@@ -165,10 +164,14 @@ export default function Home() {
       .finally(() => setConfigLoaded(true));
   }, []);
 
+  useEffect(() => {
+    if (configLoaded && !isAdmin && activeTab === "admin") setActiveTab("draw");
+  }, [activeTab, configLoaded, isAdmin]);
+
   async function updateProtectionRule() {
     if (!isAdmin || isSavingRule) return;
     setIsSavingRule(true);
-    setMessage("");
+    setAdminMessage("");
 
     try {
       const nextValue = !protectTopFour;
@@ -184,9 +187,9 @@ export default function Home() {
 
       setProtectTopFour(payload.protectTopFour);
       setDraw(null);
-      setMessage(`Top-four protection turned ${payload.protectTopFour ? "on" : "off"}.`);
+      setAdminMessage(`Top-four protection turned ${payload.protectTopFour ? "on" : "off"}.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The rule could not be updated.");
+      setAdminMessage(error instanceof Error ? error.message : "The rule could not be updated.");
     } finally {
       setIsSavingRule(false);
     }
@@ -253,7 +256,7 @@ export default function Home() {
       return;
     }
     if (protectTopFour && names.length < 5) {
-      setMessage("Add at least one participant outside positions 1–4, or turn the protection rule off in tournament-config.json.");
+      setMessage("Add at least one participant outside positions 1–4, or ask an administrator to turn off top-four protection.");
       return;
     }
     setDraw(makeDraw(names, protectTopFour));
@@ -269,13 +272,32 @@ export default function Home() {
   return (
     <main>
       <header className="site-header">
-        <a className="brand" href="#top" aria-label="SmashDraw home">
+        <a className="brand" href="#top" aria-label="SmashDraw home" onClick={() => setActiveTab("draw")}>
           <span className="brand-mark" aria-hidden="true"><i /><b /></span>
           <span>SMASH<span>DRAW</span></span>
         </a>
-        <span className="header-kicker">Knockout tournament maker</span>
+        <div className="header-actions">
+          <nav className="site-tabs" aria-label="Application sections">
+            <button
+              className={activeTab === "draw" ? "active" : ""}
+              type="button"
+              aria-current={activeTab === "draw" ? "page" : undefined}
+              onClick={() => setActiveTab("draw")}
+            >Draw</button>
+            {isAdmin && (
+              <button
+                className={activeTab === "admin" ? "active" : ""}
+                type="button"
+                aria-current={activeTab === "admin" ? "page" : undefined}
+                onClick={() => setActiveTab("admin")}
+              >Admin</button>
+            )}
+          </nav>
+          <span className="header-kicker">Knockout tournament maker</span>
+        </div>
       </header>
 
+      {activeTab === "draw" ? <>
       <section className="hero" id="top">
         <div className="hero-copy">
           <p className="eyebrow">Ready. Set. Smash.</p>
@@ -331,28 +353,6 @@ export default function Home() {
             <div><strong>Drop a participant file here</strong><small>TXT, CSV, XLS or XLSX · names in the first column</small></div>
             <button className="secondary-button" type="button" onClick={() => fileInputRef.current?.click()}>Choose file</button>
             <input ref={fileInputRef} type="file" accept=".txt,.csv,.xls,.xlsx" onChange={handleFileChange} hidden />
-          </div>
-
-          <div className="rule-card">
-            <span className={`rule-status ${protectTopFour ? "on" : "off"}`}><i />{configLoaded ? (protectTopFour ? "Rule on" : "Rule off") : "Loading rule"}</span>
-            <div>
-              <strong>Protect participants 1–4</strong>
-              <p>{protectTopFour ? "The first four entrants cannot draw one another." : "All participants may draw one another."}</p>
-              <small>{isAdmin ? "You are signed in as an administrator." : "Only an administrator can change this setting."}</small>
-            </div>
-            <button
-              className={`admin-toggle ${protectTopFour ? "is-on" : ""}`}
-              type="button"
-              role="switch"
-              aria-checked={protectTopFour}
-              aria-label="Protect participants 1 to 4"
-              disabled={!configLoaded || !isAdmin || isSavingRule}
-              onClick={updateProtectionRule}
-              title={isAdmin ? "Change top-four protection" : "Administrator access required"}
-            >
-              <span><i /></span>
-              <b>{isSavingRule ? "Saving" : isAdmin ? "Admin control" : "Locked"}</b>
-            </button>
           </div>
 
           {message && <p className="form-message" role="status">{message}</p>}
@@ -412,6 +412,58 @@ export default function Home() {
               </div>
             </div>
           )}
+        </section>
+      )}
+
+      </> : (
+        <section className="admin-page" id="top">
+          <div className="admin-heading">
+            <div>
+              <p className="eyebrow">Restricted access</p>
+              <h1>Admin<br /><em>controls.</em></h1>
+              <p>Manage tournament-wide rules. Changes apply immediately to every future draw and every user.</p>
+            </div>
+            <span className="admin-shield" aria-hidden="true">A</span>
+          </div>
+
+          <div className="admin-workspace">
+            <div className="admin-panel">
+              <span className="step-number">01</span>
+              <p className="section-label">Draw protection</p>
+              <h2>Tournament rules</h2>
+
+              <div className="rule-card admin-rule-card">
+                <span className={`rule-status ${protectTopFour ? "on" : "off"}`}><i />{configLoaded ? (protectTopFour ? "Rule on" : "Rule off") : "Loading rule"}</span>
+                <div>
+                  <strong>Protect participants 1–4</strong>
+                  <p>{protectTopFour ? "The first four entrants cannot draw one another." : "All participants may draw one another."}</p>
+                  <small>You are signed in as an administrator.</small>
+                </div>
+                <button
+                  className={`admin-toggle ${protectTopFour ? "is-on" : ""}`}
+                  type="button"
+                  role="switch"
+                  aria-checked={protectTopFour}
+                  aria-label="Protect participants 1 to 4"
+                  disabled={!configLoaded || isSavingRule}
+                  onClick={updateProtectionRule}
+                >
+                  <span><i /></span>
+                  <b>{isSavingRule ? "Saving" : "Admin control"}</b>
+                </button>
+              </div>
+
+              {adminMessage && <p className="admin-message" role="status">{adminMessage}</p>}
+            </div>
+
+            <aside className="admin-note">
+              <span className="step-number">02</span>
+              <p className="section-label">Rule behavior</p>
+              <h2>What this changes</h2>
+              <p>When enabled, positions 1, 2, 3 and 4 are kept apart during random pairing. The fixture itself stays clean—players are not marked or labelled as protected.</p>
+              <button className="secondary-button" type="button" onClick={() => setActiveTab("draw")}>Return to draw</button>
+            </aside>
+          </div>
         </section>
       )}
 
