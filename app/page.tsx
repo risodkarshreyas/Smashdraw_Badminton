@@ -137,8 +137,6 @@ export default function Home() {
   const [participantText, setParticipantText] = useState(sampleParticipants);
   const [protectTopFour, setProtectTopFour] = useState(true);
   const [configLoaded, setConfigLoaded] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isSavingRule, setIsSavingRule] = useState(false);
   const [activeTab, setActiveTab] = useState<"draw" | "admin">("draw");
   const [draw, setDraw] = useState<Draw | null>(null);
@@ -154,25 +152,17 @@ export default function Home() {
         if (!response.ok) throw new Error("Config not found");
         return response.json();
       })
-      .then((config: { protectTopFour?: boolean; isAdmin?: boolean; isAuthenticated?: boolean }) => {
+      .then((config: { protectTopFour?: boolean }) => {
         setProtectTopFour(config.protectTopFour !== false);
-        setIsAdmin(config.isAdmin === true);
-        setIsAuthenticated(config.isAuthenticated === true);
       })
       .catch(() => {
         setProtectTopFour(true);
-        setIsAdmin(false);
-        setIsAuthenticated(false);
       })
       .finally(() => setConfigLoaded(true));
   }, []);
 
-  useEffect(() => {
-    if (configLoaded && !isAdmin && activeTab === "admin") setActiveTab("draw");
-  }, [activeTab, configLoaded, isAdmin]);
-
   async function updateProtectionRule() {
-    if (!isAdmin || isSavingRule) return;
+    if (isSavingRule) return;
     setIsSavingRule(true);
     setAdminMessage("");
 
@@ -259,7 +249,7 @@ export default function Home() {
       return;
     }
     if (protectTopFour && names.length < 5) {
-      setMessage("Add at least one participant outside positions 1–4, or ask an administrator to turn off top-four protection.");
+      setMessage("Add at least one participant outside positions 1–4, or turn off top-four protection in the Admin tab.");
       return;
     }
     setDraw(makeDraw(names, protectTopFour));
@@ -287,19 +277,13 @@ export default function Home() {
               aria-current={activeTab === "draw" ? "page" : undefined}
               onClick={() => setActiveTab("draw")}
             >Draw</button>
-            {isAdmin && (
-              <button
-                className={activeTab === "admin" ? "active" : ""}
-                type="button"
-                aria-current={activeTab === "admin" ? "page" : undefined}
-                onClick={() => setActiveTab("admin")}
-              >Admin</button>
-            )}
+            <button
+              className={activeTab === "admin" ? "active" : ""}
+              type="button"
+              aria-current={activeTab === "admin" ? "page" : undefined}
+              onClick={() => setActiveTab("admin")}
+            >Admin</button>
           </nav>
-          <a
-            className="admin-auth-link"
-            href={isAuthenticated ? "/signout-with-chatgpt?return_to=%2F" : "/signin-with-chatgpt?return_to=%2F"}
-          >{isAuthenticated ? "Sign out" : "Admin sign in"}</a>
           <span className="header-kicker">Knockout tournament maker</span>
         </div>
       </header>
@@ -426,9 +410,9 @@ export default function Home() {
         <section className="admin-page" id="top">
           <div className="admin-heading">
             <div>
-              <p className="eyebrow">Restricted access</p>
+              <p className="eyebrow">Tournament settings</p>
               <h1>Admin<br /><em>controls.</em></h1>
-              <p>Manage tournament-wide rules. Changes apply immediately to every future draw and every user.</p>
+              <p>Manage tournament-wide rules without signing in. Changes apply immediately to every future draw and every user.</p>
             </div>
             <span className="admin-shield" aria-hidden="true">A</span>
           </div>
@@ -444,7 +428,7 @@ export default function Home() {
                 <div>
                   <strong>Protect participants 1–4</strong>
                   <p>{protectTopFour ? "The first four entrants cannot draw one another." : "All participants may draw one another."}</p>
-                  <small>You are signed in as an administrator.</small>
+                  <small>This control is available to everyone using the application.</small>
                 </div>
                 <button
                   className={`admin-toggle ${protectTopFour ? "is-on" : ""}`}
@@ -456,7 +440,7 @@ export default function Home() {
                   onClick={updateProtectionRule}
                 >
                   <span><i /></span>
-                  <b>{isSavingRule ? "Saving" : "Admin control"}</b>
+                  <b>{isSavingRule ? "Saving" : "Rule control"}</b>
                 </button>
               </div>
 

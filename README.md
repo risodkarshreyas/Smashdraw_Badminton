@@ -9,7 +9,7 @@ SmashDraw is a responsive web application for creating randomized, single-round 
 - Generate one randomized knockout round at a time.
 - Automatically assign byes when required.
 - Optionally prevent participants 1–4 from drawing one another.
-- Secure, administrator-only tournament rule controls.
+- Shared tournament rule controls available without authentication.
 - Print-friendly match fixtures.
 
 ## Run locally
@@ -29,21 +29,13 @@ Open `http://localhost:3000`.
 npm run build
 ```
 
-## Administrator configuration
+## Tournament configuration
 
-Copy `.env.example` to your local environment file and set the administrator email allowlist:
-
-```text
-ADMIN_EMAILS=admin@example.com
-```
-
-Multiple administrator emails can be separated with commas. The deployed runtime value should be stored in the hosting platform rather than committed to source control.
-
-The selected top-four protection setting is persisted in a D1 database. Database schema and migrations are in `db/` and `drizzle/`.
+The Admin tab is visible to every user and does not require authentication. The selected top-four protection setting is persisted in a D1 database and applies to all users. Database schema and migrations are in `db/` and `drizzle/`.
 
 ## Main project files
 
 - `app/page.tsx` — tournament and Admin interfaces.
-- `app/api/tournament-config/route.ts` — protected configuration API.
+- `app/api/tournament-config/route.ts` — shared configuration API.
 - `public/og.png` — SmashDraw badminton key art.
 - `CONFIGURATION.md` — tournament rule behavior.

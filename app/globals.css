@@ -45,8 +45,6 @@ main { min-height: 100vh; overflow: hidden; background: radial-gradient(circle a
 .site-tabs button { min-width: 70px; padding: 8px 14px; border-radius: 999px; background: transparent; color: var(--muted); cursor: pointer; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .site-tabs button:hover { color: var(--paper); }
 .site-tabs button.active { background: var(--lime); color: var(--ink); }
-.admin-auth-link { color: var(--paper); border-bottom: 1px solid var(--orange); padding: 7px 0; text-decoration: none; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; }
-.admin-auth-link:hover { color: var(--orange); }
 
 .hero {
   width: min(1240px, calc(100% - 48px));
@@ -227,7 +225,6 @@ footer a { color: var(--lime); text-decoration: none; font-weight: 750; }
   .brand-mark b { left: 8px; top: 16px; }
   .header-actions { gap: 8px; }
   .site-tabs button { min-width: 52px; padding: 7px 8px; }
-  .admin-auth-link { font-size: 8px; padding: 6px 0; }
   h1 { font-size: clamp(48px, 16vw, 72px); }
   .hero { min-height: auto; }
   .hero-copy { padding-top: 52px; }

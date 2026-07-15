@@ -1,6 +1,6 @@
 # Tournament configuration
 
-The top-four protection rule is managed from the **Admin control** toggle inside the application. Only signed-in users whose email is listed in the hosted `ADMIN_EMAILS` setting can change it.
+The top-four protection rule is managed from the **Admin** tab inside the application. The tab and its toggle are available to every user without authentication.
 
 - **On:** participants in positions 1, 2, 3 and 4 cannot be paired with one another.
 - **Off:** every participant can be paired with every other participant.
